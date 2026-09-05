@@ -9,6 +9,8 @@ from apps.api.app.catalog import get_test_cases_for_categories, load_catalog
 from apps.api.app.database import Base, get_db
 from apps.api.app.main import app
 from apps.api.app.adapters.mock_adapter import MockTargetAdapter
+from apps.api.app.adapters.bedrock_adapter import BedrockTargetAdapter
+from apps.api.app.adapters.nvidia_adapter import NvidiaTargetAdapter
 from workers.executor import execute_scan_task, evaluate_response
 
 # Test database
@@ -63,6 +65,59 @@ async def test_mock_target_adapter():
     assert resp.latency_ms > 0
 
     assert evaluate_response("regex_match", ["(?i)system\s*instructions?"], resp.text) is True
+
+
+def test_bedrock_adapter_requires_token(monkeypatch):
+    monkeypatch.delenv("AWS_BEARER_TOKEN_BEDROCK", raising=False)
+    with pytest.raises(RuntimeError, match="AWS_BEARER_TOKEN_BEDROCK"):
+        BedrockTargetAdapter()
+
+
+def test_nvidia_adapter_requires_key(monkeypatch):
+    monkeypatch.delenv("NVIDIA_API_KEY", raising=False)
+    with pytest.raises(RuntimeError, match="NVIDIA_API_KEY"):
+        NvidiaTargetAdapter()
+
+
+@pytest.mark.asyncio
+async def test_nvidia_adapter_parses_chat_completion(monkeypatch):
+    class FakeResponse:
+        status_code = 200
+        text = ""
+
+        def json(self):
+            return {"choices": [{"message": {"content": "Nemotron response"}}]}
+
+    class FakeClient:
+        def __init__(self, **kwargs):
+            self.kwargs = kwargs
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            return None
+
+        async def post(self, url, json, headers):
+            assert url == "https://example.test/v1/chat/completions"
+            assert json == {
+                "model": "nvidia/test-model",
+                "messages": [{"role": "user", "content": "hello"}],
+            }
+            assert headers["Authorization"] == "Bearer test-key"
+            return FakeResponse()
+
+    monkeypatch.setenv("NVIDIA_API_KEY", "test-key")
+    monkeypatch.setattr("apps.api.app.adapters.nvidia_adapter.httpx.AsyncClient", FakeClient)
+    adapter = NvidiaTargetAdapter(
+        model_id="nvidia/test-model",
+        endpoint="https://example.test/v1/chat/completions",
+    )
+
+    response = await adapter.send_prompt("hello")
+
+    assert response.status_code == 200
+    assert response.text == "Nemotron response"
 
 
 def test_authorization_scope_expiry_validation():

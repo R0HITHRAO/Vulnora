@@ -1,12 +1,19 @@
 import asyncio
 from datetime import datetime, timezone
+import os
 import re
 from typing import Optional
 from uuid import uuid4
 
 from sqlalchemy.orm import Session
 
-from apps.api.app.adapters import BaseTargetAdapter, HTTPTargetAdapter, MockTargetAdapter
+from apps.api.app.adapters import (
+    BaseTargetAdapter,
+    BedrockTargetAdapter,
+    HTTPTargetAdapter,
+    MockTargetAdapter,
+    NvidiaTargetAdapter,
+)
 from apps.api.app.catalog import SecurityTestCase, get_test_cases_for_categories
 from apps.api.app.models import FindingModel, ScanModel, TargetModel, AuthorizationScopeModel, utc_now
 
@@ -47,18 +54,27 @@ async def execute_scan_task(scan_id: str, db_session_factory):
         target = db.query(TargetModel).filter(TargetModel.id == scan.target_id).first() if scan.target_id else None
         auth = db.query(AuthorizationScopeModel).filter(AuthorizationScopeModel.id == scan.authorization_id).first() if scan.authorization_id else None
 
-        # Determine target adapter
+        # Keep demo scans offline by default; opt into external targets explicitly.
         adapter: BaseTargetAdapter
+        adapter_mode = os.getenv("VULNORA_TARGET_ADAPTER", "mock").lower()
         is_mock_target = (
             scan.safe_test_mode
             or (target and "mock" in target.base_url.lower())
             or (target and "localhost:8000" in target.base_url.lower())
         )
 
-        if is_mock_target or not target:
+        if is_mock_target or not target or adapter_mode == "mock":
             adapter = MockTargetAdapter(base_url="http://mock-target.local", simulate_latency=0.1)
-        else:
+        elif adapter_mode == "bedrock":
+            adapter = BedrockTargetAdapter()
+        elif adapter_mode == "nvidia":
+            adapter = NvidiaTargetAdapter()
+        elif adapter_mode == "http":
             adapter = HTTPTargetAdapter(base_url=target.base_url)
+        else:
+            raise ValueError(
+                "Unsupported VULNORA_TARGET_ADAPTER. Use 'mock', 'http', 'bedrock', or 'nvidia'."
+            )
 
         # Load security test cases
         categories = scan.categories or ["prompt_injection", "disclosure", "agency"]

@@ -55,6 +55,59 @@ running. The backend currently stores scan records in memory and returns
 deterministic demo findings; the next implementation phase will replace that
 executor with isolated workers, a persistent database, and real target adapters.
 
+### Amazon Bedrock target
+
+Scans use the offline mock adapter by default. To assess an authorized Bedrock
+model, set the adapter and credentials in the API process environment:
+
+```powershell
+$env:VULNORA_TARGET_ADAPTER = "bedrock"
+$env:AWS_REGION = "us-east-1"
+$env:BEDROCK_MODEL_ID = "us.anthropic.claude-sonnet-4-6"
+$env:AWS_BEARER_TOKEN_BEDROCK = "your-replacement-token"
+```
+
+The bearer token is read at runtime and is never stored in the database or
+returned by the API. Use a new token if a previous token was exposed.
+
+For NVIDIA-hosted Nemotron, use the NVIDIA API key separately:
+
+```powershell
+$env:VULNORA_TARGET_ADAPTER = "nvidia"
+$env:NVIDIA_MODEL_ID = "nvidia/nemotron-3-super-120b-a12b"
+$env:NVIDIA_API_KEY = "your-nvidia-api-key"
+```
+
+The NVIDIA adapter calls the OpenAI-compatible
+`https://integrate.api.nvidia.com/v1/chat/completions` endpoint. Do not put an
+NVIDIA key in `AWS_BEARER_TOKEN_BEDROCK`.
+
+Create a scan only for an explicitly authorized target. The target hostname
+must be included in `allowed_hostnames`; for NVIDIA-hosted inference, a minimal
+request can use `https://integrate.api.nvidia.com` as the target URL:
+
+```json
+{
+  "target": {
+    "name": "Authorized NVIDIA Nemotron",
+    "target_type": "chatbot",
+    "base_url": "https://integrate.api.nvidia.com",
+    "environment": "development"
+  },
+  "authorization": {
+    "signed_by": "your-name",
+    "allowed_hostnames": ["integrate.api.nvidia.com"],
+    "approved_categories": ["prompt_injection", "disclosure", "agency"],
+    "max_requests": 10,
+    "max_concurrency": 1,
+    "emergency_stop_contact": "your-email@example.com",
+    "expires_at": "2026-12-31T23:59:59Z"
+  },
+  "categories": ["prompt_injection", "disclosure"],
+  "safe_test_mode": false
+}
+```
+
 ## Safety boundary
 
 Only test systems for which the operator has explicit authorization. The API
