@@ -428,6 +428,8 @@ export function App() {
   });
   const [activeTab, setActiveTab] = useState<"payload" | "response" | "mitigation">("payload");
   const [selectedCategoryFilter, setSelectedCategoryFilter] = useState<string>("all");
+  const [findingSearch, setFindingSearch] = useState("");
+  const [copyStatus, setCopyStatus] = useState("");
 
   // Hydrate findings with 3D positions
   const hydrateWithPositions = (rawFindings: Finding[]): Finding[] => {
@@ -529,11 +531,53 @@ export function App() {
     }
   }
 
+  function resetDemoFindings() {
+    const hydrated = hydrateWithPositions(initialFindings);
+    setFindings(hydrated);
+    setSelectedFinding(hydrated[0]);
+    setSelectedCategoryFilter("all");
+    setFindingSearch("");
+    setTestsProgress({ current: 0, total: 10 });
+    setScanStatus("Demo telemetry restored");
+  }
+
+  async function copySelectedEvidence() {
+    if (!selectedFinding) return;
+    const content = activeTab === "payload"
+      ? selectedFinding.raw_prompt
+      : activeTab === "response"
+        ? selectedFinding.raw_response
+        : selectedFinding.mitigation;
+    if (!content) return;
+    await navigator.clipboard.writeText(content);
+    setCopyStatus("Copied");
+    window.setTimeout(() => setCopyStatus(""), 1600);
+  }
+
+  function exportFindings() {
+    const blob = new Blob([JSON.stringify(findings, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = "vulnora-findings.json";
+    anchor.click();
+    URL.revokeObjectURL(url);
+  }
+
   // Filtered findings for 3D visualization
   const displayedFindings = useMemo(() => {
-    if (selectedCategoryFilter === "all") return findings;
-    return findings.filter((f) => f.severity === selectedCategoryFilter);
-  }, [findings, selectedCategoryFilter]);
+    const normalizedSearch = findingSearch.trim().toLowerCase();
+    return findings.filter((finding) => {
+      const matchesSeverity =
+        selectedCategoryFilter === "all" || finding.severity === selectedCategoryFilter;
+      const matchesSearch =
+        !normalizedSearch ||
+        [finding.id, finding.title, finding.category, finding.test_id]
+          .filter(Boolean)
+          .some((value) => value!.toLowerCase().includes(normalizedSearch));
+      return matchesSeverity && matchesSearch;
+    });
+  }, [findings, selectedCategoryFilter, findingSearch]);
 
   const critCount = findings.filter((f) => f.severity === "critical").length;
   const highCount = findings.filter((f) => f.severity === "high").length;
@@ -609,6 +653,14 @@ export function App() {
               </>
             )}
           </button>
+          <div className="action-row">
+            <button type="button" className="secondary-button" onClick={resetDemoFindings}>
+              Reset demo
+            </button>
+            <button type="button" className="secondary-button" onClick={exportFindings}>
+              Export JSON
+            </button>
+          </div>
 
           {/* Live Progress Bar when scanning */}
           {isStartingScan && (
@@ -694,6 +746,15 @@ export function App() {
               </button>
             </div>
           </div>
+          <div className="scene-search">
+            <input
+              value={findingSearch}
+              onChange={(event) => setFindingSearch(event.target.value)}
+              placeholder="Search finding, category, or ID..."
+              aria-label="Search findings"
+            />
+            <span>{displayedFindings.length} visible</span>
+          </div>
 
           {/* Three.js Canvas */}
           <Canvas camera={{ position: [0, 1.2, 7.8], fov: 48 }}>
@@ -771,6 +832,9 @@ export function App() {
                   Remediation
                 </button>
               </div>
+              <button type="button" className="copy-button" onClick={copySelectedEvidence}>
+                {copyStatus || "Copy active evidence"}
+              </button>
 
               {/* Tab Content */}
               {activeTab === "payload" && (

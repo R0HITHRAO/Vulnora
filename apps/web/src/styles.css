@@ -351,6 +351,71 @@ body {
   filter: grayscale(0.2);
 }
 
+.action-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.secondary-button,
+.copy-button {
+  border: 1px solid var(--border-subtle);
+  border-radius: 9px;
+  background: rgba(16, 23, 58, 0.8);
+  color: var(--text-muted);
+  padding: 8px 10px;
+  font-size: 0.7rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.secondary-button:hover,
+.copy-button:hover {
+  border-color: var(--border-bright);
+  color: #fff;
+  background: rgba(99, 102, 241, 0.2);
+}
+
+.copy-button {
+  width: 100%;
+  margin-bottom: 10px;
+  text-align: left;
+}
+
+.scene-search {
+  position: absolute;
+  top: 58px;
+  left: 20px;
+  right: 20px;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  pointer-events: none;
+}
+
+.scene-search input {
+  width: min(320px, 70%);
+  padding: 8px 12px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 9px;
+  background: rgba(10, 15, 38, 0.82);
+  color: var(--text-main);
+  outline: none;
+  pointer-events: auto;
+}
+
+.scene-search input:focus {
+  border-color: var(--border-bright);
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15);
+}
+
+.scene-search span {
+  color: var(--text-dim);
+  font-size: 0.68rem;
+}
+
 /* Live Progress Bar */
 .progress-bar-container {
   margin-top: 14px;
