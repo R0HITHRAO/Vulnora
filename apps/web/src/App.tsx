@@ -234,6 +234,10 @@ function LaserPath({
     const p2 = new THREE.Vector3(...to);
     return [p1, p2];
   }, [from, to]);
+  const geometry = useMemo(
+    () => new THREE.BufferGeometry().setFromPoints(points),
+    [points],
+  );
 
   useFrame((state) => {
     if (photonRef.current) {
@@ -245,7 +249,7 @@ function LaserPath({
   return (
     <group>
       <line>
-        <bufferGeometry attach="geometry" setFromPoints={points} />
+        <primitive object={geometry} attach="geometry" />
         <lineBasicMaterial
           attach="material"
           color={color}
